@@ -1,21 +1,21 @@
-#include "whistlerecog.h"
+#include "whistle_detector.h"
 
 #include <iostream>
-#include <unistd.h>
 
 using namespace std;
 
 int main() {
 
+    AlsaRecorder a(AlsaRecorder::V5_SETTINGS);
+
     //Create a new whistle detector.
-    WhistleRecog w;
+    WhistleDetector w(a, AlsaRecorder::V5_SETTINGS.sampleRate * 0.4, 2000);
 
     while(true) {
         // Scan for whistle.
         if (w.process()) {
             cout << "Whisle detected." << endl;
         }
-        usleep(30);
     }
     
     return 0;

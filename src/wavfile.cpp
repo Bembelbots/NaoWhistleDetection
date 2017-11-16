@@ -1,7 +1,11 @@
+/**
+ * @author Felix Weiglhofer
+ */
 #include "wavfile.h"
 
-#include "const.h"
+#include "constants.h"
 
+#include <cassert>
 #include <iostream>
 #include <stdio.h>
 #include <math.h>
@@ -12,68 +16,31 @@
 
 using namespace std;
 
-
-struct wavfile {
-    char    id[4];          // should always contain "RIFF"
-    int32_t totallength;    // total file length minus 8
-    char    wavefmt[8];     // should be "WAVEfmt "
-    int32_t format;         // 16 for PCM format
-    int16_t pcm;            // 1 for PCM format
-    int16_t channels;       // channels
-    int32_t frequency;      // sampling frequency
-    int32_t bytes_per_second;
-    int16_t bytes_by_capture;
-    int16_t bits_per_sample;
-    char    data[4];        // should always contain "data"
-    int32_t bytes_in_data;
-} __attribute__((__packed__));
-
-int is_big_endian(void) {
-    union {
-        uint32_t i;
-        char c[4];
-    } bint = {0x01000000};
-    return bint.c[0]==1;
-}
-
 WavFile::WavFile(const string &fileName, int buffer_ms) 
     : _channelNum(0)
     , _sampleRate(0)
-    , _windowSize(0)
+    , _buffer(nullptr)
+    , _bufferSize(0)
     , _windowStart(0)
 {
     readFile(fileName);
-    _windowSize = ((float) _sampleRate) / ((float) MS_PER_SEC) * buffer_ms;
-    _windowStart = -_windowSize;
+    _bufferSize = ((float) _sampleRate) / ((float) MS_PER_SEC) * buffer_ms;
+    _buffer = new int16_t[_bufferSize];
 }
 
-int16_t *WavFile::getBuffer() {
-    int16_t *winPos = &(_data.data()[_windowStart]);
-    return winPos;
+WavFile::~WavFile() {
+    delete[] _buffer;
 }
 
-int WavFile::getBufferSize() {
-    return _windowSize;
-}
+bool WavFile::fetch() {
+    assert(!endOfData());
 
-short WavFile::getChannelNum() {
-    return _channelNum;
-}
+    std::vector<int16_t>::iterator start = _data.begin() + _windowStart;
+    std::vector<int16_t>::iterator end = start + _bufferSize;
 
-double WavFile::getSampleRate() {
-    return _sampleRate;
-}
+    std::copy(start, end, _buffer);
 
-bool WavFile::readFromDevice() {
-    if (endOfData()) {
-        return false;
-    }
-    _windowStart += _windowSize;
-    int bufferTailSize = remainingBuffer();
-
-    if (bufferTailSize < _windowSize) {
-        _windowSize = bufferTailSize;
-    }
+    _windowStart += _bufferSize;
 
     return true;
 }
@@ -83,8 +50,7 @@ int WavFile::remainingBuffer() {
 }
 
 bool WavFile::endOfData() {
-    unsigned int windowEnd = _windowStart + _windowSize;
-    return windowEnd == _data.size();
+    return _windowStart + _bufferSize >= _data.size();
 }
 
 float WavFile::getLength_s() {
@@ -101,7 +67,7 @@ bool WavFile::readFile(const string &fileName) {
     FILE *wav = fopen(filename,"rb");
     struct wavfile header;
 
-    if ( wav == NULL ) {
+    if ( wav == nullptr ) {
         fprintf(stderr,"Can't open input file %s\n", filename);
         return false;
     }
@@ -109,19 +75,22 @@ bool WavFile::readFile(const string &fileName) {
     // read header
     if ( fread(&header,sizeof(header),1,wav) < 1 ) {
         fprintf(stderr,"Can't read input file header %s\n", filename);
+        fclose(wav);
         return false;
     }
 
     // if wav file isn't the same endianness than the current environment
     // we quit
-    if ( is_big_endian() ) {
+    if ( isBigEndian() ) {
         if (   memcmp( header.id,"RIFX", 4) != 0 ) {
             fprintf(stderr,"ERROR: %s is not a big endian wav file\n", filename); 
+            fclose(wav);
             return false;
         }
     } else {
         if (   memcmp( header.id,"RIFF", 4) != 0 ) {
             fprintf(stderr,"ERROR: %s is not a little endian wav file\n", filename); 
+            fclose(wav);
             return false;
         }
     }
@@ -130,10 +99,12 @@ bool WavFile::readFile(const string &fileName) {
         || memcmp( header.data, "data", 4) != 0 
             ) {
         fprintf(stderr,"ERROR: Not wav format\n"); 
+        fclose(wav);
         return false; 
     }
     if (header.format != 16) {
         fprintf(stderr,"\nERROR: not 16 bit wav format.");
+        fclose(wav);
         return false;
     }
     fprintf(stderr,"format: %d bits", header.format);
@@ -156,6 +127,7 @@ bool WavFile::readFile(const string &fileName) {
 
     if ( memcmp( header.data, "data", 4) != 0 ) { 
         fprintf(stderr,"ERROR: Prrroblem?\n"); 
+        fclose(wav);
         return false; 
     }
     fprintf(stderr,"wav format\n");
@@ -170,5 +142,8 @@ bool WavFile::readFile(const string &fileName) {
     while( fread(&value,sizeof(value),1,wav) ) {
         _data.push_back(value);
     }
+    fclose(wav);
     return true;
 }
+
+// vim: set ts=4 sw=4 sts=4 expandtab:

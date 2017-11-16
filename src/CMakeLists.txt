@@ -1,37 +1,23 @@
-cmake_minimum_required(VERSION 2.6)
-
-project(bb-whistle)
-
-set (CMAKE_CXX_FLAGS "-g -std=c++11 -Wall -Werror")
-
-file(GLOB WHISTLE_SRC
-	"alsarecorder.cpp"
-	"alsarecorder.h"
-	"audiocontainer.cpp"
-	"audiocontainer.h"
-	"audiostream.h"
-	"config.h"
-	"frequencyspectrum.cpp"
-	"frequencyspectrum.h"
-	"whistlematch.cpp"
-	"whistlematch.h"
-	"whistlerecog.cpp"
-	"whistlerecog.h"
-	"whistlesettings.cpp"
-	"whistlesettings.h"
+set(WHISTLE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/alsarecorder.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/fourier_transform.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/rectangular_smooth.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sine_generator.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/wavfile.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/whistle_classifier.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/whistle_detector.cpp"
 )
+add_library(whistle STATIC ${WHISTLE_SRC})
+target_link_libraries(whistle asound fftw3f)
 
-file(GLOB WHISTLE_DEBUG_SRC
-    "wavfile.cpp"
-    "whistledebug.cpp"
+set(WHISTLE_DEBUGGER_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/whistle_debugger.cpp"
 )
+add_executable(whistledebug ${WHISTLE_DEBUGGER_SRC})
+target_link_libraries(whistledebug whistle)
 
-add_library(bb-whistle STATIC ${WHISTLE_SRC})
-target_link_libraries(bb-whistle fftw3f asound)
-
-add_executable(whistledebug ${WHISTLE_DEBUG_SRC})
-target_link_libraries(whistledebug bb-whistle)
-
-file(GLOB WHISTLE_EXAMPLE_SRC "example.cpp")
-add_executable(minimal-example ${WHISTLE_EXAMPLE_SRC})
-target_link_libraries(minimal-example bb-whistle)
+set(EXAMPLE_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/example.cpp"
+)
+add_executable(minimal-example ${EXAMPLE_SRC})
+target_link_libraries(minimal-example whistle)
